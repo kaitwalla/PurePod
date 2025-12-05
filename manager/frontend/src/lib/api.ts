@@ -1,4 +1,4 @@
-import type { Feed, Episode } from '@/types/api'
+import type { Feed, PaginatedEpisodes } from '@/types/api'
 
 // In dev, Vite proxies /api/* to the backend. In prod, API is served from same origin.
 const API_BASE = import.meta.env.DEV ? '/api' : ''
@@ -39,17 +39,40 @@ export const feedsApi = {
     }),
 }
 
+export interface EpisodeListParams {
+  feed_id?: number
+  status?: string
+  show_ignored?: boolean
+  page?: number
+  page_size?: number
+}
+
 export const episodesApi = {
-  list: (params?: { feed_id?: number; status?: string }) => {
+  list: (params?: EpisodeListParams) => {
     const searchParams = new URLSearchParams()
     if (params?.feed_id) searchParams.set('feed_id', String(params.feed_id))
     if (params?.status) searchParams.set('status', params.status)
+    if (params?.show_ignored) searchParams.set('show_ignored', 'true')
+    if (params?.page) searchParams.set('page', String(params.page))
+    if (params?.page_size) searchParams.set('page_size', String(params.page_size))
     const query = searchParams.toString()
-    return fetchAPI<Episode[]>(`/episodes${query ? `?${query}` : ''}`)
+    return fetchAPI<PaginatedEpisodes>(`/episodes${query ? `?${query}` : ''}`)
   },
 
   queueBulk: (episodeIds: number[]) =>
     fetchAPI<{ queued: number }>('/episodes/queue', {
+      method: 'POST',
+      body: JSON.stringify({ episode_ids: episodeIds }),
+    }),
+
+  ignoreBulk: (episodeIds: number[]) =>
+    fetchAPI<{ ignored: number }>('/episodes/ignore', {
+      method: 'POST',
+      body: JSON.stringify({ episode_ids: episodeIds }),
+    }),
+
+  unignoreBulk: (episodeIds: number[]) =>
+    fetchAPI<{ restored: number }>('/episodes/unignore', {
       method: 'POST',
       body: JSON.stringify({ episode_ids: episodeIds }),
     }),

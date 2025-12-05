@@ -11,6 +11,7 @@ class EpisodeStatus(str, enum.Enum):
     PROCESSING = "processing"
     CLEANED = "cleaned"
     FAILED = "failed"
+    IGNORED = "ignored"
 
 
 class Feed(SQLModel, table=True):
@@ -38,6 +39,7 @@ class Episode(SQLModel, table=True):
     status: EpisodeStatus = Field(default=EpisodeStatus.DISCOVERED)
     title: str
     audio_url: str
+    published_at: Optional[datetime] = Field(default=None)
     local_filename: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

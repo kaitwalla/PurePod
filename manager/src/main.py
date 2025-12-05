@@ -304,13 +304,40 @@ async def get_feed_rss(feed_id: int, session: Session = Depends(get_db_session))
     return Response(content=xml_str, media_type="application/rss+xml")
 
 
-@app.get("/episodes", response_model=List[Episode])
+class EpisodeWithFeed(BaseModel):
+    """Episode with feed title for display."""
+    id: int
+    feed_id: int
+    feed_title: str
+    guid: str
+    status: EpisodeStatus
+    title: str
+    audio_url: str
+    published_at: datetime | None
+    local_filename: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class PaginatedEpisodes(BaseModel):
+    """Paginated episode response."""
+    items: List[EpisodeWithFeed]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+@app.get("/episodes", response_model=PaginatedEpisodes)
 async def list_episodes(
     feed_id: int = None,
     status: EpisodeStatus = None,
+    show_ignored: bool = False,
+    page: int = 1,
+    page_size: int = 25,
     session: Session = Depends(get_db_session),
 ):
-    """List episodes with optional filters."""
+    """List episodes with optional filters and pagination."""
     query = select(Episode)
 
     if feed_id is not None:
@@ -318,18 +345,109 @@ async def list_episodes(
 
     if status is not None:
         query = query.where(Episode.status == status)
+    elif not show_ignored:
+        # By default, hide ignored episodes
+        query = query.where(Episode.status != EpisodeStatus.IGNORED)
 
+    # Order by published date (newest first), fallback to created_at
+    query = query.order_by(Episode.published_at.desc().nullslast(), Episode.created_at.desc())
+
+    # Get total count
+    count_query = select(Episode)
+    if feed_id is not None:
+        count_query = count_query.where(Episode.feed_id == feed_id)
+    if status is not None:
+        count_query = count_query.where(Episode.status == status)
+    elif not show_ignored:
+        count_query = count_query.where(Episode.status != EpisodeStatus.IGNORED)
+
+    all_episodes = session.exec(count_query).all()
+    total = len(all_episodes)
+
+    # Paginate
+    offset = (page - 1) * page_size
+    query = query.offset(offset).limit(page_size)
     episodes = session.exec(query).all()
-    return episodes
+
+    # Get feed titles
+    feed_ids = {ep.feed_id for ep in episodes}
+    feeds = {f.id: f for f in session.exec(select(Feed).where(Feed.id.in_(feed_ids))).all()}
+
+    items = [
+        EpisodeWithFeed(
+            id=ep.id,
+            feed_id=ep.feed_id,
+            feed_title=feeds.get(ep.feed_id, Feed(title="Unknown")).title,
+            guid=ep.guid,
+            status=ep.status,
+            title=ep.title,
+            audio_url=ep.audio_url,
+            published_at=ep.published_at,
+            local_filename=ep.local_filename,
+            created_at=ep.created_at,
+            updated_at=ep.updated_at,
+        )
+        for ep in episodes
+    ]
+
+    total_pages = (total + page_size - 1) // page_size
+
+    return PaginatedEpisodes(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
-class BulkQueueRequest(BaseModel):
+class BulkEpisodeRequest(BaseModel):
     episode_ids: List[int]
+
+
+@app.post("/episodes/ignore")
+async def ignore_episodes(
+    request: BulkEpisodeRequest,
+    session: Session = Depends(get_db_session),
+):
+    """Mark episodes as ignored."""
+    ignored_count = 0
+
+    for episode_id in request.episode_ids:
+        episode = session.get(Episode, episode_id)
+        if episode and episode.status in (EpisodeStatus.DISCOVERED, EpisodeStatus.FAILED):
+            episode.status = EpisodeStatus.IGNORED
+            episode.updated_at = datetime.utcnow()
+            session.add(episode)
+            ignored_count += 1
+
+    session.commit()
+    return {"ignored": ignored_count}
+
+
+@app.post("/episodes/unignore")
+async def unignore_episodes(
+    request: BulkEpisodeRequest,
+    session: Session = Depends(get_db_session),
+):
+    """Restore ignored episodes to discovered status."""
+    restored_count = 0
+
+    for episode_id in request.episode_ids:
+        episode = session.get(Episode, episode_id)
+        if episode and episode.status == EpisodeStatus.IGNORED:
+            episode.status = EpisodeStatus.DISCOVERED
+            episode.updated_at = datetime.utcnow()
+            session.add(episode)
+            restored_count += 1
+
+    session.commit()
+    return {"restored": restored_count}
 
 
 @app.post("/episodes/queue")
 async def queue_episodes(
-    request: BulkQueueRequest,
+    request: BulkEpisodeRequest,
     session: Session = Depends(get_db_session),
 ):
     """

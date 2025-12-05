@@ -1,4 +1,4 @@
-export type EpisodeStatus = 'discovered' | 'queued' | 'processing' | 'cleaned' | 'failed'
+export type EpisodeStatus = 'discovered' | 'queued' | 'processing' | 'cleaned' | 'failed' | 'ignored'
 
 export interface Feed {
   id: number
@@ -15,13 +15,23 @@ export interface Feed {
 export interface Episode {
   id: number
   feed_id: number
+  feed_title: string
   guid: string
   status: EpisodeStatus
   title: string
   audio_url: string
+  published_at: string | null
   local_filename: string | null
   created_at: string
   updated_at: string
+}
+
+export interface PaginatedEpisodes {
+  items: Episode[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
 }
 
 export interface EpisodeProgress {

@@ -1,6 +1,7 @@
 import logging
 from typing import List, Optional
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 
 import feedparser
 from sqlmodel import Session, select
@@ -174,12 +175,21 @@ def ingest_feed(feed_id: int, session: Optional[Session] = None) -> List[Episode
             # This ONLY applies to new episodes being discovered right now
             status = EpisodeStatus.QUEUED if feed.auto_process else EpisodeStatus.DISCOVERED
 
+            # Parse publish date
+            published_at = None
+            if entry.get("published"):
+                try:
+                    published_at = parsedate_to_datetime(entry.published)
+                except (ValueError, TypeError):
+                    pass
+
             episode = Episode(
                 feed_id=feed_id,
                 guid=guid,
                 status=status,
                 title=entry.get("title", "Untitled Episode"),
                 audio_url=audio_url,
+                published_at=published_at,
             )
 
             session.add(episode)
