@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: manager/Dockerfile
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8000}:8000"
     environment:
       - DATABASE_URL=postgresql://podcast:podcast@db:5432/podcastpurifier
       - REDIS_URL=redis://redis:6379/0
@@ -42,7 +42,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
