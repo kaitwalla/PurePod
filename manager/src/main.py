@@ -335,7 +335,7 @@ async def queue_episodes(
     """
     Queue multiple episodes for processing.
 
-    Only episodes with DISCOVERED status can be queued.
+    Episodes with DISCOVERED or FAILED status can be queued.
     This dispatches Celery tasks to the Worker for each episode.
     """
     queued_count = 0
@@ -343,7 +343,7 @@ async def queue_episodes(
 
     for episode_id in request.episode_ids:
         episode = session.get(Episode, episode_id)
-        if episode and episode.status == EpisodeStatus.DISCOVERED:
+        if episode and episode.status in (EpisodeStatus.DISCOVERED, EpisodeStatus.FAILED):
             episode.status = EpisodeStatus.QUEUED
             episode.updated_at = datetime.utcnow()
             session.add(episode)

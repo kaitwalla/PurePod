@@ -141,7 +141,8 @@ export function EpisodeTable() {
       sorting,
       rowSelection,
     },
-    enableRowSelection: (row) => row.original.status === 'discovered',
+    enableRowSelection: (row) =>
+      row.original.status === 'discovered' || row.original.status === 'failed',
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
