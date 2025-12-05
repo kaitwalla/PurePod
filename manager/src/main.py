@@ -1,0 +1,286 @@
+import asyncio
+import json
+import logging
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import List, Set
+
+import aiofiles
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, WebSocket, WebSocketDisconnect
+from pydantic import BaseModel
+from sqlmodel import Session, select
+
+from .config import AUDIO_STORAGE_PATH
+from .database import init_db, engine
+from .models import Feed, Episode, EpisodeStatus
+from .ingest import ingest_feed
+from .tasks import dispatch_episode_processing
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+class ConnectionManager:
+    """Manages WebSocket connections for progress updates."""
+
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
+
+    async def broadcast(self, message: dict):
+        """Broadcast message to all connected clients."""
+        disconnected = set()
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.add(connection)
+        self.active_connections -= disconnected
+
+
+manager = ConnectionManager()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on startup."""
+    init_db()
+    yield
+
+
+app = FastAPI(
+    title="PodcastPurifier Manager",
+    description="Manager service for PodcastPurifier - strips ads from podcasts",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+
+def get_db_session():
+    """Dependency for database sessions."""
+    with Session(engine) as session:
+        yield session
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
+
+
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time progress updates.
+
+    Clients connect here to receive progress updates for episodes
+    currently being processed by workers.
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Keep connection alive, wait for messages (or disconnection)
+            # In production, workers would POST progress updates that get broadcast
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+
+@app.post("/progress/{episode_id}")
+async def update_progress(
+    episode_id: int,
+    progress: int,
+    stage: str = "processing",
+):
+    """
+    Endpoint for workers to report processing progress.
+
+    This broadcasts the progress to all connected WebSocket clients.
+    """
+    await manager.broadcast({
+        "episode_id": episode_id,
+        "progress": progress,
+        "stage": stage,
+    })
+    return {"status": "ok"}
+
+
+@app.post("/upload/{episode_id}")
+async def upload_cleaned_audio(
+    episode_id: int,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_db_session),
+):
+    """
+    Upload a cleaned MP3 file from the Worker.
+
+    This endpoint allows the Worker to upload the final cleaned MP3
+    back to the Manager after processing.
+    """
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+
+    if not file.filename or not file.filename.endswith(".mp3"):
+        raise HTTPException(status_code=400, detail="Only MP3 files are accepted")
+
+    feed_dir = AUDIO_STORAGE_PATH / str(episode.feed_id)
+    feed_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = f"{episode_id}_{file.filename.replace('/', '_')}"
+    file_path = feed_dir / safe_filename
+
+    try:
+        async with aiofiles.open(file_path, "wb") as out_file:
+            content = await file.read()
+            await out_file.write(content)
+    except Exception as e:
+        logger.error(f"Failed to save file for episode {episode_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save file")
+
+    episode.local_filename = str(file_path.relative_to(AUDIO_STORAGE_PATH))
+    episode.status = EpisodeStatus.CLEANED
+    episode.updated_at = datetime.utcnow()
+    session.add(episode)
+    session.commit()
+
+    # Broadcast completion
+    await manager.broadcast({
+        "episode_id": episode_id,
+        "progress": 100,
+        "stage": "completed",
+    })
+
+    logger.info(f"Uploaded cleaned audio for episode {episode_id}: {safe_filename}")
+
+    return {
+        "message": "File uploaded successfully",
+        "episode_id": episode_id,
+        "local_filename": episode.local_filename,
+    }
+
+
+@app.post("/feeds", response_model=Feed)
+async def create_feed(
+    title: str,
+    rss_url: str,
+    auto_process: bool = False,
+    session: Session = Depends(get_db_session),
+):
+    """Create a new feed."""
+    existing = session.exec(select(Feed).where(Feed.rss_url == rss_url)).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Feed with this URL already exists")
+
+    feed = Feed(title=title, rss_url=rss_url, auto_process=auto_process)
+    session.add(feed)
+    session.commit()
+    session.refresh(feed)
+
+    return feed
+
+
+@app.get("/feeds", response_model=List[Feed])
+async def list_feeds(session: Session = Depends(get_db_session)):
+    """List all feeds."""
+    feeds = session.exec(select(Feed)).all()
+    return feeds
+
+
+@app.patch("/feeds/{feed_id}/auto-process", response_model=Feed)
+async def update_feed_auto_process(
+    feed_id: int,
+    auto_process: bool,
+    session: Session = Depends(get_db_session),
+):
+    """Update the auto_process setting for a feed."""
+    feed = session.get(Feed, feed_id)
+    if not feed:
+        raise HTTPException(status_code=404, detail=f"Feed {feed_id} not found")
+
+    feed.auto_process = auto_process
+    feed.updated_at = datetime.utcnow()
+    session.add(feed)
+    session.commit()
+    session.refresh(feed)
+
+    return feed
+
+
+@app.post("/feeds/{feed_id}/ingest")
+async def trigger_ingest(feed_id: int, session: Session = Depends(get_db_session)):
+    """Trigger ingestion for a specific feed."""
+    feed = session.get(Feed, feed_id)
+    if not feed:
+        raise HTTPException(status_code=404, detail=f"Feed {feed_id} not found")
+
+    new_episodes = ingest_feed(feed_id, session)
+
+    return {
+        "message": f"Ingestion complete for feed {feed_id}",
+        "new_episodes": len(new_episodes),
+        "episodes": [{"id": ep.id, "title": ep.title, "status": ep.status} for ep in new_episodes],
+    }
+
+
+@app.get("/episodes", response_model=List[Episode])
+async def list_episodes(
+    feed_id: int = None,
+    status: EpisodeStatus = None,
+    session: Session = Depends(get_db_session),
+):
+    """List episodes with optional filters."""
+    query = select(Episode)
+
+    if feed_id is not None:
+        query = query.where(Episode.feed_id == feed_id)
+
+    if status is not None:
+        query = query.where(Episode.status == status)
+
+    episodes = session.exec(query).all()
+    return episodes
+
+
+class BulkQueueRequest(BaseModel):
+    episode_ids: List[int]
+
+
+@app.post("/episodes/queue")
+async def queue_episodes(
+    request: BulkQueueRequest,
+    session: Session = Depends(get_db_session),
+):
+    """
+    Queue multiple episodes for processing.
+
+    Only episodes with DISCOVERED status can be queued.
+    This dispatches Celery tasks to the Worker for each episode.
+    """
+    queued_count = 0
+    dispatched_tasks = []
+
+    for episode_id in request.episode_ids:
+        episode = session.get(Episode, episode_id)
+        if episode and episode.status == EpisodeStatus.DISCOVERED:
+            episode.status = EpisodeStatus.QUEUED
+            episode.updated_at = datetime.utcnow()
+            session.add(episode)
+            queued_count += 1
+
+            # Dispatch to Worker
+            try:
+                task_id = dispatch_episode_processing(episode_id, episode.audio_url)
+                dispatched_tasks.append({"episode_id": episode_id, "task_id": task_id})
+            except Exception as e:
+                logger.error(f"Failed to dispatch episode {episode_id}: {e}")
+
+    session.commit()
+
+    return {"queued": queued_count, "tasks": dispatched_tasks}

@@ -1,0 +1,23 @@
+[project]
+name = "podcastpurifier-worker"
+version = "0.1.0"
+description = "ML Worker for PodcastPurifier - runs on Apple Silicon to process audio"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "celery[redis]>=5.3.6",
+    "redis>=5.0.0",
+    "mlx-whisper>=0.1.0",
+    "mlx-lm>=0.4.0",
+    "pydub>=0.25.1",
+    "requests>=2.31.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.scripts]
+worker = "main:start_worker"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+]
