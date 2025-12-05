@@ -1,23 +1,22 @@
 [project]
-name = "podcastpurifier-worker"
+name = "podcast-purifier-worker"
 version = "0.1.0"
-description = "ML Worker for PodcastPurifier - runs on Apple Silicon to process audio"
+description = "ML Worker for PodcastPurifier - strips ads from podcasts using MLX"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 dependencies = [
-    "celery[redis]>=5.3.6",
+    "celery>=5.3.0",
     "redis>=5.0.0",
     "mlx-whisper>=0.1.0",
-    "mlx-lm>=0.4.0",
-    "pydub>=0.25.1",
+    "mlx-lm>=0.1.0",
+    "pydub>=0.25.0",
     "requests>=2.31.0",
     "python-multipart>=0.0.6",
 ]
 
-[project.scripts]
-worker = "main:start_worker"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.0.0",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["worker"]

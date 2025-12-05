@@ -1,16 +1,17 @@
-import asyncio
-import json
 import logging
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import List, Set
 
 import aiofiles
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from .config import AUDIO_STORAGE_PATH
+from .config import AUDIO_STORAGE_PATH, PUBLIC_HOSTNAME
 from .database import init_db, engine
 from .models import Feed, Episode, EpisodeStatus
 from .ingest import ingest_feed
@@ -60,6 +61,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Mount static files for serving cleaned audio
+app.mount("/files", StaticFiles(directory=str(AUDIO_STORAGE_PATH)), name="files")
 
 
 def get_db_session():
@@ -227,6 +231,62 @@ async def trigger_ingest(feed_id: int, session: Session = Depends(get_db_session
         "new_episodes": len(new_episodes),
         "episodes": [{"id": ep.id, "title": ep.title, "status": ep.status} for ep in new_episodes],
     }
+
+
+@app.get("/feed/{feed_id}")
+async def get_feed_rss(feed_id: int, session: Session = Depends(get_db_session)):
+    """
+    Generate RSS 2.0 XML feed for cleaned episodes.
+
+    Returns an RSS feed with enclosure tags pointing to the public URL
+    for each cleaned episode's audio file.
+    """
+    feed = session.get(Feed, feed_id)
+    if not feed:
+        raise HTTPException(status_code=404, detail=f"Feed {feed_id} not found")
+
+    # Get only cleaned episodes for this feed
+    episodes = session.exec(
+        select(Episode)
+        .where(Episode.feed_id == feed_id)
+        .where(Episode.status == EpisodeStatus.CLEANED)
+        .order_by(Episode.created_at.desc())
+    ).all()
+
+    # Build RSS 2.0 XML
+    rss = ET.Element("rss", version="2.0")
+    channel = ET.SubElement(rss, "channel")
+
+    ET.SubElement(channel, "title").text = feed.title
+    ET.SubElement(channel, "link").text = f"https://{PUBLIC_HOSTNAME}/feed/{feed_id}"
+    ET.SubElement(channel, "description").text = f"Ad-free version of {feed.title}"
+    ET.SubElement(channel, "lastBuildDate").text = datetime.utcnow().strftime(
+        "%a, %d %b %Y %H:%M:%S +0000"
+    )
+
+    for episode in episodes:
+        if not episode.local_filename:
+            continue
+
+        item = ET.SubElement(channel, "item")
+        ET.SubElement(item, "title").text = episode.title
+        ET.SubElement(item, "guid").text = episode.guid
+
+        pub_date = episode.updated_at.strftime("%a, %d %b %Y %H:%M:%S +0000")
+        ET.SubElement(item, "pubDate").text = pub_date
+
+        # Build public URL for the audio file
+        audio_url = f"https://{PUBLIC_HOSTNAME}/files/{episode.local_filename}"
+        ET.SubElement(
+            item,
+            "enclosure",
+            url=audio_url,
+            type="audio/mpeg",
+            length="0",
+        )
+
+    xml_str = ET.tostring(rss, encoding="unicode", xml_declaration=True)
+    return Response(content=xml_str, media_type="application/rss+xml")
 
 
 @app.get("/episodes", response_model=List[Episode])
