@@ -2,16 +2,19 @@ import logging
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import List, Set
 
 import aiofiles
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, WebSocket, WebSocketDisconnect
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from .config import AUDIO_STORAGE_PATH, PUBLIC_HOSTNAME
+
+STATIC_DIR = Path(__file__).parent.parent / "static"
 from .database import init_db, engine
 from .models import Feed, Episode, EpisodeStatus
 from .ingest import ingest_feed
@@ -344,3 +347,22 @@ async def queue_episodes(
     session.commit()
 
     return {"queued": queued_count, "tasks": dispatched_tasks}
+
+
+# Serve frontend static files (must be after API routes)
+if STATIC_DIR.exists():
+    @app.get("/")
+    async def serve_spa_root():
+        """Serve the SPA index.html at root."""
+        return FileResponse(STATIC_DIR / "index.html")
+
+    # Mount static assets (JS, CSS, etc.)
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{path:path}")
+    async def serve_spa_fallback(path: str):
+        """Serve index.html for SPA client-side routing."""
+        file_path = STATIC_DIR / path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(STATIC_DIR / "index.html")

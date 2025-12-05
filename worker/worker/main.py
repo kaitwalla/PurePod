@@ -5,6 +5,9 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import mlx_whisper
 import requests
 from celery import Celery

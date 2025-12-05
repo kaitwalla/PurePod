@@ -12,7 +12,9 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - AUDIO_STORAGE_PATH=/app/audio
       - PUBLIC_HOSTNAME=${PUBLIC_HOSTNAME:-localhost:8000}
-      - MANAGER_BASE_URL=http://web:8000
+      # MANAGER_BASE_URL is the callback URL the Worker uses to upload cleaned audio
+      # Since Worker runs outside Docker, it reaches Manager via the exposed port
+      - MANAGER_BASE_URL=${MANAGER_BASE_URL:-http://localhost:8000}
     volumes:
       - audio_files:/app/audio
     depends_on:
@@ -39,6 +41,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped

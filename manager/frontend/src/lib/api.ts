@@ -1,6 +1,7 @@
 import type { Feed, Episode } from '@/types/api'
 
-const API_BASE = '/api'
+// In dev, Vite proxies /api/* to the backend. In prod, API is served from same origin.
+const API_BASE = import.meta.env.DEV ? '/api' : ''
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`, {
