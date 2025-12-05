@@ -32,6 +32,44 @@ def parse_rss(rss_url: str) -> Optional[feedparser.FeedParserDict]:
         return None
 
 
+def extract_feed_metadata(rss_url: str) -> Optional[dict]:
+    """
+    Extract metadata from an RSS feed.
+
+    Args:
+        rss_url: The URL of the RSS feed.
+
+    Returns:
+        Dictionary with title, description, image_url, author or None if parsing failed.
+    """
+    parsed = parse_rss(rss_url)
+    if not parsed:
+        return None
+
+    feed_info = parsed.feed
+
+    # Extract image URL (try multiple common locations)
+    image_url = None
+    if hasattr(feed_info, 'image') and feed_info.image:
+        image_url = feed_info.image.get('href') or feed_info.image.get('url')
+    if not image_url and hasattr(feed_info, 'itunes_image'):
+        image_url = feed_info.itunes_image.get('href')
+
+    # Extract author
+    author = None
+    if hasattr(feed_info, 'author'):
+        author = feed_info.author
+    elif hasattr(feed_info, 'itunes_author'):
+        author = feed_info.itunes_author
+
+    return {
+        'title': feed_info.get('title', 'Unknown Podcast'),
+        'description': feed_info.get('subtitle') or feed_info.get('summary') or feed_info.get('description'),
+        'image_url': image_url,
+        'author': author,
+    }
+
+
 def extract_audio_url(entry: feedparser.FeedParserDict) -> Optional[str]:
     """
     Extract the audio URL from an RSS entry.

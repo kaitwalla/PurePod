@@ -23,8 +23,8 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
 export const feedsApi = {
   list: () => fetchAPI<Feed[]>('/feeds'),
 
-  create: (data: { title: string; rss_url: string; auto_process?: boolean }) =>
-    fetchAPI<Feed>(`/feeds?title=${encodeURIComponent(data.title)}&rss_url=${encodeURIComponent(data.rss_url)}&auto_process=${data.auto_process ?? false}`, {
+  create: (rss_url: string) =>
+    fetchAPI<Feed>(`/feeds?rss_url=${encodeURIComponent(rss_url)}`, {
       method: 'POST',
     }),
 

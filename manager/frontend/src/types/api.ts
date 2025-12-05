@@ -4,6 +4,9 @@ export interface Feed {
   id: number
   title: string
   rss_url: string
+  description: string | null
+  image_url: string | null
+  author: string | null
   auto_process: boolean
   created_at: string
   updated_at: string

@@ -17,7 +17,7 @@ from .config import AUDIO_STORAGE_PATH, PUBLIC_HOSTNAME
 STATIC_DIR = Path(__file__).parent.parent / "static"
 from .database import init_db, engine
 from .models import Feed, Episode, EpisodeStatus
-from .ingest import ingest_feed
+from .ingest import ingest_feed, extract_feed_metadata
 from .tasks import dispatch_episode_processing
 
 logging.basicConfig(level=logging.INFO)
@@ -175,17 +175,29 @@ async def upload_cleaned_audio(
 
 @app.post("/feeds", response_model=Feed)
 async def create_feed(
-    title: str,
     rss_url: str,
-    auto_process: bool = False,
     session: Session = Depends(get_db_session),
 ):
-    """Create a new feed."""
+    """Create a new feed by fetching metadata from the RSS URL."""
     existing = session.exec(select(Feed).where(Feed.rss_url == rss_url)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Feed with this URL already exists")
 
-    feed = Feed(title=title, rss_url=rss_url, auto_process=auto_process)
+    # Fetch metadata from the RSS feed
+    metadata = extract_feed_metadata(rss_url)
+    if not metadata:
+        raise HTTPException(status_code=400, detail="Could not parse RSS feed. Please check the URL.")
+
+    # Append "(Purified)" to the title
+    title = f"{metadata['title']} (Purified)"
+
+    feed = Feed(
+        title=title,
+        rss_url=rss_url,
+        description=metadata.get('description'),
+        image_url=metadata.get('image_url'),
+        author=metadata.get('author'),
+    )
     session.add(feed)
     session.commit()
     session.refresh(feed)

@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Rss, RefreshCw } from 'lucide-react'
+import { RefreshCw, Podcast } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -31,24 +31,39 @@ export function FeedCard({ feed }: FeedCardProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Rss className="h-5 w-5 text-muted-foreground" />
-            <CardTitle className="text-lg">{feed.title}</CardTitle>
+        <div className="flex items-start gap-3">
+          {feed.image_url ? (
+            <img
+              src={feed.image_url}
+              alt={feed.title}
+              className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+              <Podcast className="h-6 w-6 text-muted-foreground" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <CardTitle className="text-lg leading-tight">{feed.title}</CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => ingestFeed.mutate()}
+                disabled={ingestFeed.isPending}
+                title="Refresh feed"
+                className="flex-shrink-0"
+              >
+                <RefreshCw className={`h-4 w-4 ${ingestFeed.isPending ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
+            {feed.author && (
+              <CardDescription className="text-xs mt-1">
+                {feed.author}
+              </CardDescription>
+            )}
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => ingestFeed.mutate()}
-            disabled={ingestFeed.isPending}
-            title="Refresh feed"
-          >
-            <RefreshCw className={`h-4 w-4 ${ingestFeed.isPending ? 'animate-spin' : ''}`} />
-          </Button>
         </div>
-        <CardDescription className="truncate text-xs">
-          {feed.rss_url}
-        </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between">
@@ -56,7 +71,7 @@ export function FeedCard({ feed }: FeedCardProps) {
             htmlFor={`auto-process-${feed.id}`}
             className="text-sm font-medium cursor-pointer"
           >
-            Auto-Process Future Episodes
+            Auto-Process New Episodes
           </label>
           <Switch
             id={`auto-process-${feed.id}`}
