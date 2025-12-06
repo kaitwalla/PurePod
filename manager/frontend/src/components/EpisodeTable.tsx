@@ -45,17 +45,19 @@ export function EpisodeTable() {
   const pageSize = 25
   const { progressMap } = useWebSocket()
 
-  const queryParams: EpisodeListParams = {
-    feed_id: selectedFeedId,
-    show_ignored: activeTab === 'ignored',
-    page,
-    page_size: pageSize,
-  }
-
-  // If showing ignored tab, filter to only ignored
-  if (activeTab === 'ignored') {
-    queryParams.status = 'ignored'
-  }
+  const queryParams: EpisodeListParams = useMemo(() => {
+    const params: EpisodeListParams = {
+      feed_id: selectedFeedId,
+      show_ignored: activeTab === 'ignored',
+      page,
+      page_size: pageSize,
+    }
+    // If showing ignored tab, filter to only ignored
+    if (activeTab === 'ignored') {
+      params.status = 'ignored'
+    }
+    return params
+  }, [selectedFeedId, activeTab, page, pageSize])
 
   const { data, isLoading } = useQuery({
     queryKey: ['episodes', queryParams],

@@ -50,7 +50,7 @@ export interface EpisodeListParams {
 export const episodesApi = {
   list: (params?: EpisodeListParams) => {
     const searchParams = new URLSearchParams()
-    if (params?.feed_id) searchParams.set('feed_id', String(params.feed_id))
+    if (params?.feed_id != null) searchParams.set('feed_id', String(params.feed_id))
     if (params?.status) searchParams.set('status', params.status)
     if (params?.show_ignored) searchParams.set('show_ignored', 'true')
     if (params?.page) searchParams.set('page', String(params.page))
