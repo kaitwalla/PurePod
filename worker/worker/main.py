@@ -17,7 +17,7 @@ from pydub import AudioSegment
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 WHISPER_MODEL = "mlx-community/distil-whisper-large-v3"
-LLM_MODEL = "mlx-community/Llama-3-8B-Instruct-4bit"
+LLM_MODEL = "mlx-community/Meta-Llama-3-8B-Instruct-4bit"
 
 app = Celery(
     "podcast_purifier_worker",
