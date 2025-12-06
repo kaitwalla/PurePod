@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -12,7 +12,6 @@ import { ListPlus, EyeOff, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Progress } from '@/components/ui/progress'
 import {
   Table,
   TableBody,
@@ -22,7 +21,6 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { episodesApi, feedsApi } from '@/lib/api'
-import { useWebSocket } from '@/hooks/useWebSocket'
 import type { Episode, EpisodeStatus, Feed } from '@/types/api'
 
 const statusVariantMap: Record<EpisodeStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -43,7 +41,6 @@ export function EpisodeTable() {
   const [selectedFeedId, setSelectedFeedId] = useState<number | undefined>()
   const [page, setPage] = useState(1)
   const pageSize = 25
-  const { progressMap } = useWebSocket()
 
   const { data, isLoading } = useQuery({
     queryKey: ['episodes', { feedId: selectedFeedId, activeTab, page }],
@@ -89,10 +86,6 @@ export function EpisodeTable() {
       setRowSelection({})
     },
   })
-
-  // Store progressMap in a ref to avoid recreating columns on every update
-  const progressMapRef = useRef(progressMap)
-  progressMapRef.current = progressMap
 
   const columns = useMemo<ColumnDef<Episode>[]>(
     () => [
@@ -150,35 +143,15 @@ export function EpisodeTable() {
         header: 'Status',
         cell: ({ row }) => {
           const status = row.original.status
-          const progress = progressMapRef.current.get(row.original.id)
-
           return (
-            <div className="flex items-center gap-2">
-              <Badge variant={statusVariantMap[status]}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </Badge>
-              {status === 'processing' && progress && (
-                <div className="w-20">
-                  <Progress value={progress.progress} className="h-2" />
-                </div>
-              )}
-            </div>
+            <Badge variant={statusVariantMap[status]}>
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </Badge>
           )
         },
       },
     ],
     []
-  )
-
-  const canSelectRow = useCallback(
-    (row: { original: Episode }) => {
-      const status = row.original.status
-      if (activeTab === 'ignored') {
-        return status === 'ignored'
-      }
-      return status === 'discovered' || status === 'failed'
-    },
-    [activeTab]
   )
 
   const table = useReactTable({
@@ -187,7 +160,13 @@ export function EpisodeTable() {
     state: {
       rowSelection,
     },
-    enableRowSelection: canSelectRow,
+    enableRowSelection: (row) => {
+      const status = row.original.status
+      if (activeTab === 'ignored') {
+        return status === 'ignored'
+      }
+      return status === 'discovered' || status === 'failed'
+    },
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => String(row.id),

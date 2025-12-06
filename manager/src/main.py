@@ -238,18 +238,19 @@ async def delete_feed(
     session: Session = Depends(get_db_session),
 ):
     """Delete a feed and all its episodes."""
-    from sqlalchemy import delete as sql_delete
-
     feed = session.get(Feed, feed_id)
     if not feed:
         raise HTTPException(status_code=404, detail=f"Feed {feed_id} not found")
 
-    # Count episodes before deletion
+    # Get and delete all episodes for this feed
     episodes = session.exec(select(Episode).where(Episode.feed_id == feed_id)).all()
     episode_count = len(episodes)
 
-    # Delete episodes using raw SQL to avoid relationship issues
-    session.exec(sql_delete(Episode).where(Episode.feed_id == feed_id))
+    for episode in episodes:
+        session.delete(episode)
+
+    # Flush to ensure episodes are deleted before feed
+    session.flush()
 
     # Delete the feed
     session.delete(feed)
@@ -399,7 +400,10 @@ async def list_episodes(
 
     # Get feed titles
     feed_ids = {ep.feed_id for ep in episodes}
-    feeds = {f.id: f for f in session.exec(select(Feed).where(Feed.id.in_(feed_ids))).all()}
+    if feed_ids:
+        feeds = {f.id: f for f in session.exec(select(Feed).where(Feed.id.in_(feed_ids))).all()}
+    else:
+        feeds = {}
 
     items = [
         EpisodeWithFeed(
