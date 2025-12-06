@@ -194,26 +194,13 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   // Determine if we're in "ignored" mode based on tab or status filter
   const isIgnoredMode = activeTab === 'ignored' || statusFilter === 'ignored'
 
-  const enableRowSelection = useCallback(
-    (row: { original: Episode }) => {
-      const status = row.original.status
-      // When viewing ignored tab or filtering by ignored status, only ignored episodes can be selected
-      if (isIgnoredMode) {
-        return status === 'ignored'
-      }
-      // Otherwise, only discovered or failed episodes can be selected
-      return status === 'discovered' || status === 'failed'
-    },
-    [isIgnoredMode]
-  )
-
   const table = useReactTable({
     data: episodes,
     columns,
     state: {
       rowSelection,
     },
-    enableRowSelection,
+    enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => String(row.id),
