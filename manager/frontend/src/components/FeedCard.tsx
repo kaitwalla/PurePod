@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, Podcast } from 'lucide-react'
+import { RefreshCw, Podcast, Trash2 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -12,6 +13,7 @@ interface FeedCardProps {
 
 export function FeedCard({ feed }: FeedCardProps) {
   const queryClient = useQueryClient()
+  const [showConfirm, setShowConfirm] = useState(false)
 
   const updateAutoProcess = useMutation({
     mutationFn: (autoProcess: boolean) =>
@@ -24,6 +26,14 @@ export function FeedCard({ feed }: FeedCardProps) {
   const ingestFeed = useMutation({
     mutationFn: () => feedsApi.ingest(feed.id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['episodes'] })
+    },
+  })
+
+  const deleteFeed = useMutation({
+    mutationFn: () => feedsApi.delete(feed.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['feeds'] })
       queryClient.invalidateQueries({ queryKey: ['episodes'] })
     },
   })
@@ -65,7 +75,7 @@ export function FeedCard({ feed }: FeedCardProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-3">
         <div className="flex items-center justify-between">
           <label
             htmlFor={`auto-process-${feed.id}`}
@@ -79,6 +89,41 @@ export function FeedCard({ feed }: FeedCardProps) {
             onCheckedChange={(checked) => updateAutoProcess.mutate(checked)}
             disabled={updateAutoProcess.isPending}
           />
+        </div>
+        <div className="pt-2 border-t">
+          {showConfirm ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm text-muted-foreground">Delete this podcast?</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowConfirm(false)}
+                  disabled={deleteFeed.isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => deleteFeed.mutate()}
+                  disabled={deleteFeed.isPending}
+                >
+                  {deleteFeed.isPending ? 'Deleting...' : 'Delete'}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowConfirm(true)}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Podcast
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

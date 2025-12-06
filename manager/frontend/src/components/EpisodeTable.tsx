@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { episodesApi, feedsApi, type EpisodeListParams } from '@/lib/api'
+import { episodesApi, feedsApi } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import type { Episode, EpisodeStatus, Feed } from '@/types/api'
 

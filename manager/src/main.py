@@ -232,6 +232,30 @@ async def update_feed_auto_process(
     return feed
 
 
+@app.delete("/feeds/{feed_id}")
+async def delete_feed(
+    feed_id: int,
+    session: Session = Depends(get_db_session),
+):
+    """Delete a feed and all its episodes."""
+    feed = session.get(Feed, feed_id)
+    if not feed:
+        raise HTTPException(status_code=404, detail=f"Feed {feed_id} not found")
+
+    # Delete all episodes for this feed
+    episodes = session.exec(select(Episode).where(Episode.feed_id == feed_id)).all()
+    for episode in episodes:
+        session.delete(episode)
+
+    # Delete the feed
+    session.delete(feed)
+    session.commit()
+
+    logger.info(f"Deleted feed {feed_id} and {len(episodes)} episodes")
+
+    return {"message": f"Feed {feed_id} deleted", "deleted_episodes": len(episodes)}
+
+
 @app.post("/feeds/{feed_id}/ingest")
 async def trigger_ingest(feed_id: int, session: Session = Depends(get_db_session)):
     """Trigger ingestion for a specific feed."""

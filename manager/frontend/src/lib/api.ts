@@ -28,6 +28,11 @@ export const feedsApi = {
       method: 'POST',
     }),
 
+  delete: (feedId: number) =>
+    fetchAPI<{ message: string; deleted_episodes: number }>(`/feeds/${feedId}`, {
+      method: 'DELETE',
+    }),
+
   updateAutoProcess: (feedId: number, autoProcess: boolean) =>
     fetchAPI<Feed>(`/feeds/${feedId}/auto-process?auto_process=${autoProcess}`, {
       method: 'PATCH',
