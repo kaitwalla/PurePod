@@ -8,6 +8,11 @@ RUN npm ci
 
 # Copy frontend source and build
 COPY manager/frontend ./
+
+# Build argument for frontend password (empty = no password required)
+ARG VITE_PASSWORD
+ENV VITE_PASSWORD=$VITE_PASSWORD
+
 RUN npm run build
 
 

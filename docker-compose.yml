@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: manager/${DOCKERFILE:-Dockerfile}
+      args:
+        - VITE_PASSWORD=${VITE_PASSWORD:-}
     ports:
       - "${WEB_PORT:-8000}:8000"
     environment:
