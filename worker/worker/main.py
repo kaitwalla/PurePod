@@ -210,6 +210,18 @@ def remove_ad_segments(
     result.export(output_path, format="mp3")
 
 
+def report_status(callback_url: str, episode_id: str, status: str, stage: str | None = None):
+    """Report status change to the Manager."""
+    # Derive base URL from callback_url (e.g., http://host/api/upload/1 -> http://host/api)
+    # callback_url format: {base}/api/upload/{episode_id}
+    base_url = callback_url.rsplit("/upload/", 1)[0]
+    status_url = f"{base_url}/episodes/{episode_id}/status"
+    try:
+        requests.post(status_url, json={"status": status, "stage": stage}, timeout=10)
+    except Exception:
+        pass  # Don't fail the task if status update fails
+
+
 @app.task(bind=True, name="worker.process_episode")
 def process_episode(self, episode_id: str, audio_url: str, callback_url: str) -> dict:
     """
@@ -233,6 +245,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
 
     try:
         # Step 1: Download
+        report_status(callback_url, episode_id, "processing", "downloading")
         self.update_state(
             state="DOWNLOADING",
             meta={"episode_id": episode_id, "step": "downloading audio"},
@@ -245,6 +258,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
                 f.write(chunk)
 
         # Step 2: Transcribe
+        report_status(callback_url, episode_id, "processing", "transcribing")
         self.update_state(
             state="TRANSCRIBING",
             meta={"episode_id": episode_id, "step": "transcribing audio"},
@@ -252,6 +266,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
         transcript = transcribe_audio(str(input_path))
 
         # Step 3: Detect ads
+        report_status(callback_url, episode_id, "processing", "analyzing")
         self.update_state(
             state="ANALYZING",
             meta={"episode_id": episode_id, "step": "detecting advertisements"},
@@ -259,6 +274,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
         ad_segments = detect_ad_segments(transcript)
 
         # Step 4: Remove ads
+        report_status(callback_url, episode_id, "processing", "cutting")
         self.update_state(
             state="CUTTING",
             meta={
@@ -270,6 +286,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
         remove_ad_segments(str(input_path), ad_segments, str(output_path))
 
         # Step 5: Upload
+        report_status(callback_url, episode_id, "processing", "uploading")
         self.update_state(
             state="UPLOADING",
             meta={"episode_id": episode_id, "step": "uploading cleaned audio"},
@@ -292,6 +309,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
         }
 
     except requests.RequestException as e:
+        report_status(callback_url, episode_id, "failed", None)
         return {
             "status": "error",
             "episode_id": episode_id,
@@ -299,6 +317,7 @@ def process_episode(self, episode_id: str, audio_url: str, callback_url: str) ->
             "message": str(e),
         }
     except Exception as e:
+        report_status(callback_url, episode_id, "failed", None)
         return {
             "status": "error",
             "episode_id": episode_id,

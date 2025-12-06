@@ -620,6 +620,45 @@ async def fail_episodes(
     return {"failed": failed_count}
 
 
+class EpisodeStatusUpdate(BaseModel):
+    status: str  # processing, failed, etc.
+    stage: str | None = None  # downloading, transcribing, analyzing, cutting, uploading
+
+
+@api.post("/episodes/{episode_id}/status")
+async def update_episode_status(
+    episode_id: int,
+    update: EpisodeStatusUpdate,
+    session: Session = Depends(get_db_session),
+):
+    """
+    Update episode status from the worker.
+
+    Called by the worker to report progress/state changes.
+    """
+    episode = session.get(Episode, episode_id)
+    if not episode:
+        raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+
+    if update.status == "processing":
+        episode.status = EpisodeStatus.PROCESSING
+    elif update.status == "failed":
+        episode.status = EpisodeStatus.FAILED
+
+    episode.updated_at = datetime.utcnow()
+    session.add(episode)
+    session.commit()
+
+    # Broadcast to WebSocket clients
+    await manager.broadcast({
+        "episode_id": episode_id,
+        "status": update.status,
+        "stage": update.stage,
+    })
+
+    return {"ok": True}
+
+
 # Include API router
 app.include_router(api)
 
