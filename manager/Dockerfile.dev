@@ -37,8 +37,13 @@ RUN mkdir -p /app/audio
 # Install a process manager to run both services
 RUN pip install supervisor
 
-# Create dev vite config that proxies to internal backend
-RUN echo 'import { defineConfig } from "vite"\n\
+# Create startup script that generates vite config with PUBLIC_HOSTNAME
+RUN echo '#!/bin/bash\n\
+# Extract hostname without port for allowedHosts\n\
+ALLOWED_HOST=$(echo "${PUBLIC_HOSTNAME:-localhost}" | cut -d: -f1)\n\
+\n\
+cat > /app/frontend/vite.config.dev.ts << EOF\n\
+import { defineConfig } from "vite"\n\
 import react from "@vitejs/plugin-react"\n\
 import tailwindcss from "@tailwindcss/vite"\n\
 import path from "path"\n\
@@ -53,6 +58,7 @@ export default defineConfig({\n\
   server: {\n\
     host: "0.0.0.0",\n\
     port: 8000,\n\
+    allowedHosts: ["localhost", "${ALLOWED_HOST}"],\n\
     proxy: {\n\
       "/api": {\n\
         target: "http://127.0.0.1:8001",\n\
@@ -73,7 +79,10 @@ export default defineConfig({\n\
     },\n\
   },\n\
 })\n\
-' > /app/frontend/vite.config.dev.ts
+EOF\n\
+\n\
+exec supervisord -c /etc/supervisord.conf\n\
+' > /app/start.sh && chmod +x /app/start.sh
 
 # Create supervisor config - backend on 8001, vite on 8000
 RUN echo '[supervisord]\n\
@@ -100,4 +109,4 @@ stderr_logfile_maxbytes=0\n\
 
 EXPOSE 8000
 
-CMD ["supervisord", "-c", "/etc/supervisord.conf"]
+CMD ["/app/start.sh"]

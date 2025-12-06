@@ -36,6 +36,10 @@ export function FeedCard({ feed }: FeedCardProps) {
       queryClient.invalidateQueries({ queryKey: ['feeds'] })
       queryClient.invalidateQueries({ queryKey: ['episodes'] })
     },
+    onError: (error) => {
+      console.error('Failed to delete feed:', error)
+      setShowConfirm(false)
+    },
   })
 
   return (
