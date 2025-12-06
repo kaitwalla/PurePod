@@ -32,7 +32,7 @@ const statusVariantMap: Record<EpisodeStatus, 'default' | 'secondary' | 'destruc
   ignored: 'secondary',
 }
 
-type TabType = 'active' | 'ignored'
+type TabType = 'active' | 'cleaned' | 'ignored'
 
 interface EpisodeTableProps {
   initialStatusFilter?: string | null
@@ -62,15 +62,39 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   const { data, isLoading, error } = useQuery({
     queryKey: ['episodes', selectedFeedId, activeTab, statusFilter, page],
     queryFn: () => {
-      // If we have a specific status filter, use that
-      // Otherwise, use the tab logic
-      const status = statusFilter ?? (activeTab === 'ignored' ? 'ignored' : undefined)
-      const showIgnored = statusFilter === 'ignored' || activeTab === 'ignored'
+      // If we have a specific status filter from StatusOverview, use that
+      if (statusFilter) {
+        return episodesApi.list({
+          feed_id: selectedFeedId,
+          status: statusFilter,
+          page,
+          page_size: pageSize,
+        })
+      }
 
+      // Otherwise, use tab logic
+      if (activeTab === 'ignored') {
+        return episodesApi.list({
+          feed_id: selectedFeedId,
+          status: 'ignored',
+          page,
+          page_size: pageSize,
+        })
+      }
+
+      if (activeTab === 'cleaned') {
+        return episodesApi.list({
+          feed_id: selectedFeedId,
+          status: 'cleaned',
+          page,
+          page_size: pageSize,
+        })
+      }
+
+      // Active tab: exclude ignored and cleaned
       return episodesApi.list({
         feed_id: selectedFeedId,
-        status,
-        show_ignored: showIgnored,
+        exclude_statuses: 'ignored,cleaned',
         page,
         page_size: pageSize,
       })
@@ -196,8 +220,9 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     []
   )
 
-  // Determine if we're in "ignored" mode based on tab or status filter
+  // Determine special modes based on tab or status filter
   const isIgnoredMode = activeTab === 'ignored' || statusFilter === 'ignored'
+  const isCleanedMode = activeTab === 'cleaned' || statusFilter === 'cleaned'
 
   const coreRowModel = useMemo(() => getCoreRowModel(), [])
 
@@ -209,6 +234,9 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     },
     enableRowSelection: (row) => {
       const status = row.original.status
+      if (isCleanedMode) {
+        return false // No bulk actions on cleaned episodes
+      }
       if (isIgnoredMode) {
         return status === 'ignored'
       }
@@ -325,6 +353,13 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
             onClick={() => handleTabChange('active')}
           >
             Active
+          </Button>
+          <Button
+            variant={activeTab === 'cleaned' && !statusFilter ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleTabChange('cleaned')}
+          >
+            Cleaned
           </Button>
           <Button
             variant={activeTab === 'ignored' && !statusFilter ? 'default' : 'outline'}
@@ -474,7 +509,7 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  {activeTab === 'ignored' ? 'No ignored episodes.' : 'No episodes found.'}
+                  {activeTab === 'ignored' ? 'No ignored episodes.' : activeTab === 'cleaned' ? 'No cleaned episodes yet.' : 'No episodes found.'}
                 </TableCell>
               </TableRow>
             )}

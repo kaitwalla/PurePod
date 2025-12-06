@@ -394,7 +394,7 @@ class PaginatedEpisodes(BaseModel):
 async def list_episodes(
     feed_id: int = None,
     status: EpisodeStatus = None,
-    show_ignored: bool = False,
+    exclude_statuses: str = None,
     page: int = 1,
     page_size: int = 25,
     session: Session = Depends(get_db_session),
@@ -407,9 +407,11 @@ async def list_episodes(
 
     if status is not None:
         query = query.where(Episode.status == status)
-    elif not show_ignored:
-        # By default, hide ignored episodes
-        query = query.where(Episode.status != EpisodeStatus.IGNORED)
+    elif exclude_statuses:
+        # Exclude multiple statuses (comma-separated)
+        excluded = [EpisodeStatus(s.strip()) for s in exclude_statuses.split(",")]
+        for exc_status in excluded:
+            query = query.where(Episode.status != exc_status)
 
     # Order by published date (newest first), fallback to created_at
     query = query.order_by(Episode.published_at.desc().nullslast(), Episode.created_at.desc())
@@ -420,8 +422,10 @@ async def list_episodes(
         count_query = count_query.where(Episode.feed_id == feed_id)
     if status is not None:
         count_query = count_query.where(Episode.status == status)
-    elif not show_ignored:
-        count_query = count_query.where(Episode.status != EpisodeStatus.IGNORED)
+    elif exclude_statuses:
+        excluded = [EpisodeStatus(s.strip()) for s in exclude_statuses.split(",")]
+        for exc_status in excluded:
+            count_query = count_query.where(Episode.status != exc_status)
 
     all_episodes = session.exec(count_query).all()
     total = len(all_episodes)

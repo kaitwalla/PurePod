@@ -44,7 +44,7 @@ export const feedsApi = {
 export interface EpisodeListParams {
   feed_id?: number
   status?: string
-  show_ignored?: boolean
+  exclude_statuses?: string
   page?: number
   page_size?: number
 }
@@ -54,7 +54,7 @@ export const episodesApi = {
     const searchParams = new URLSearchParams()
     if (params?.feed_id != null) searchParams.set('feed_id', String(params.feed_id))
     if (params?.status) searchParams.set('status', params.status)
-    if (params?.show_ignored) searchParams.set('show_ignored', 'true')
+    if (params?.exclude_statuses) searchParams.set('exclude_statuses', params.exclude_statuses)
     if (params?.page) searchParams.set('page', String(params.page))
     if (params?.page_size) searchParams.set('page_size', String(params.page_size))
     const query = searchParams.toString()
