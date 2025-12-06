@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -48,9 +48,10 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   const [page, setPage] = useState(1)
   const pageSize = 25
 
-  // Update status filter when prop changes
+  // Update status filter when prop changes from parent (StatusOverview click)
   useEffect(() => {
-    if (initialStatusFilter) {
+    // Only sync when prop is a valid status string
+    if (typeof initialStatusFilter === 'string' && initialStatusFilter.length > 0) {
       setStatusFilter(initialStatusFilter)
       setActiveTab('active') // Reset tab when using status filter
       setRowSelection({})
@@ -58,7 +59,7 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     }
   }, [initialStatusFilter])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ['episodes', selectedFeedId, activeTab, statusFilter, page],
     queryFn: () => {
       // If we have a specific status filter, use that
@@ -75,6 +76,13 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
       })
     },
   })
+
+  // Log any errors
+  useEffect(() => {
+    if (error) {
+      console.error('Episodes query error:', error)
+    }
+  }, [error])
 
   const { data: feeds = [] } = useQuery({
     queryKey: ['feeds'],
@@ -176,21 +184,29 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     []
   )
 
+  // Determine if we're in "ignored" mode based on tab or status filter
+  const isIgnoredMode = activeTab === 'ignored' || statusFilter === 'ignored'
+
+  const enableRowSelection = useCallback(
+    (row: { original: Episode }) => {
+      const status = row.original.status
+      // When viewing ignored tab or filtering by ignored status, only ignored episodes can be selected
+      if (isIgnoredMode) {
+        return status === 'ignored'
+      }
+      // Otherwise, only discovered or failed episodes can be selected
+      return status === 'discovered' || status === 'failed'
+    },
+    [isIgnoredMode]
+  )
+
   const table = useReactTable({
     data: episodes,
     columns,
     state: {
       rowSelection,
     },
-    enableRowSelection: (row) => {
-      const status = row.original.status
-      // When viewing ignored tab or filtering by ignored status, only ignored episodes can be selected
-      if (activeTab === 'ignored' || statusFilter === 'ignored') {
-        return status === 'ignored'
-      }
-      // Otherwise, only discovered or failed episodes can be selected
-      return status === 'discovered' || status === 'failed'
-    },
+    enableRowSelection,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => String(row.id),
@@ -235,6 +251,16 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     setSelectedFeedId(value ? Number(value) : undefined)
     setRowSelection({})
     setPage(1)
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-destructive">
+        <div className="h-96 flex items-center justify-center text-destructive">
+          Error loading episodes: {error.message}
+        </div>
+      </div>
+    )
   }
 
   if (isLoading && !data) {
@@ -317,7 +343,7 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
         </div>
         {selectedEpisodes.length > 0 && (
           <div className="flex gap-2">
-            {activeTab === 'active' && statusFilter !== 'ignored' && (
+            {!isIgnoredMode && (
               <>
                 <Button
                   onClick={handleQueueSelected}
@@ -338,7 +364,7 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
                 </Button>
               </>
             )}
-            {(activeTab === 'ignored' || statusFilter === 'ignored') && (
+            {isIgnoredMode && (
               <Button
                 onClick={handleUnignoreSelected}
                 disabled={unignoreMutation.isPending}
