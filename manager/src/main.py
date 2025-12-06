@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
@@ -18,7 +19,7 @@ STATIC_DIR = Path(__file__).parent.parent / "static"
 from .database import init_db, engine
 from .models import Feed, Episode, EpisodeStatus
 from .ingest import ingest_feed, extract_feed_metadata
-from .tasks import dispatch_episode_processing
+from .tasks import dispatch_episode_processing, sync_task_statuses
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -51,11 +52,33 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
+async def task_status_sync_loop():
+    """Background loop that syncs Celery task statuses to episode statuses."""
+    while True:
+        try:
+            await asyncio.sleep(10)  # Check every 10 seconds
+            with Session(engine) as session:
+                result = sync_task_statuses(session)
+                if result["failed"] > 0 or result["processing"] > 0:
+                    logger.info(f"Task status sync: {result}")
+        except Exception as e:
+            logger.error(f"Error in task status sync loop: {e}")
+            await asyncio.sleep(30)  # Wait longer on error
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize database on startup."""
+    """Initialize database on startup and start background tasks."""
     init_db()
+    # Start background task sync loop
+    sync_task = asyncio.create_task(task_status_sync_loop())
     yield
+    # Cancel background task on shutdown
+    sync_task.cancel()
+    try:
+        await sync_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(
@@ -546,6 +569,55 @@ async def queue_episodes(
     session.commit()
 
     return {"queued": queued_count, "tasks": dispatched_tasks}
+
+
+@api.post("/episodes/unqueue")
+async def unqueue_episodes(
+    request: BulkEpisodeRequest,
+    session: Session = Depends(get_db_session),
+):
+    """
+    Cancel queued episodes by moving them back to DISCOVERED.
+
+    Note: This doesn't revoke the Celery task - if the worker picks it up,
+    it will still process. This just updates the status in the database.
+    """
+    unqueued_count = 0
+
+    for episode_id in request.episode_ids:
+        episode = session.get(Episode, episode_id)
+        if episode and episode.status == EpisodeStatus.QUEUED:
+            episode.status = EpisodeStatus.DISCOVERED
+            episode.updated_at = datetime.utcnow()
+            session.add(episode)
+            unqueued_count += 1
+
+    session.commit()
+    return {"unqueued": unqueued_count}
+
+
+@api.post("/episodes/fail")
+async def fail_episodes(
+    request: BulkEpisodeRequest,
+    session: Session = Depends(get_db_session),
+):
+    """
+    Mark episodes as FAILED.
+
+    Useful for manually marking stuck QUEUED or PROCESSING episodes as failed.
+    """
+    failed_count = 0
+
+    for episode_id in request.episode_ids:
+        episode = session.get(Episode, episode_id)
+        if episode and episode.status in (EpisodeStatus.QUEUED, EpisodeStatus.PROCESSING):
+            episode.status = EpisodeStatus.FAILED
+            episode.updated_at = datetime.utcnow()
+            session.add(episode)
+            failed_count += 1
+
+    session.commit()
+    return {"failed": failed_count}
 
 
 # Include API router

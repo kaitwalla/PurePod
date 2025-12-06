@@ -8,7 +8,7 @@ import {
   type RowSelectionState,
 } from '@tanstack/react-table'
 import { format } from 'date-fns'
-import { ListPlus, EyeOff, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ListPlus, EyeOff, Eye, ChevronLeft, ChevronRight, X, Undo2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -111,6 +111,24 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     },
   })
 
+  const unqueueMutation = useMutation({
+    mutationFn: episodesApi.unqueueBulk,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['episodes'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      setRowSelection({})
+    },
+  })
+
+  const failMutation = useMutation({
+    mutationFn: episodesApi.failBulk,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['episodes'] })
+      queryClient.invalidateQueries({ queryKey: ['stats'] })
+      setRowSelection({})
+    },
+  })
+
   const columns = useMemo<ColumnDef<Episode>[]>(
     () => [
       {
@@ -194,7 +212,8 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
       if (isIgnoredMode) {
         return status === 'ignored'
       }
-      return status === 'discovered' || status === 'failed'
+      // Allow selecting discovered, failed, queued, and processing episodes
+      return status === 'discovered' || status === 'failed' || status === 'queued' || status === 'processing'
     },
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: coreRowModel,
@@ -218,6 +237,22 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   const handleUnignoreSelected = () => {
     const ids = selectedEpisodes.map((ep) => ep.id)
     unignoreMutation.mutate(ids)
+  }
+
+  const handleUnqueueSelected = () => {
+    const ids = selectedEpisodes.filter((ep) => ep.status === 'queued').map((ep) => ep.id)
+    if (ids.length > 0) {
+      unqueueMutation.mutate(ids)
+    }
+  }
+
+  const handleFailSelected = () => {
+    const ids = selectedEpisodes
+      .filter((ep) => ep.status === 'queued' || ep.status === 'processing')
+      .map((ep) => ep.id)
+    if (ids.length > 0) {
+      failMutation.mutate(ids)
+    }
   }
 
   const handleTabChange = (tab: TabType) => {
@@ -334,23 +369,53 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
           <div className="flex gap-2">
             {!isIgnoredMode && (
               <>
-                <Button
-                  onClick={handleQueueSelected}
-                  disabled={queueMutation.isPending}
-                  size="sm"
-                >
-                  <ListPlus className="mr-2 h-4 w-4" />
-                  Queue ({selectedEpisodes.length})
-                </Button>
-                <Button
-                  onClick={handleIgnoreSelected}
-                  disabled={ignoreMutation.isPending}
-                  size="sm"
-                  variant="outline"
-                >
-                  <EyeOff className="mr-2 h-4 w-4" />
-                  Ignore
-                </Button>
+                {/* Queue - for discovered/failed episodes */}
+                {selectedEpisodes.some((ep) => ep.status === 'discovered' || ep.status === 'failed') && (
+                  <Button
+                    onClick={handleQueueSelected}
+                    disabled={queueMutation.isPending}
+                    size="sm"
+                  >
+                    <ListPlus className="mr-2 h-4 w-4" />
+                    Queue
+                  </Button>
+                )}
+                {/* Unqueue - for queued episodes */}
+                {selectedEpisodes.some((ep) => ep.status === 'queued') && (
+                  <Button
+                    onClick={handleUnqueueSelected}
+                    disabled={unqueueMutation.isPending}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Undo2 className="mr-2 h-4 w-4" />
+                    Unqueue
+                  </Button>
+                )}
+                {/* Mark Failed - for queued/processing episodes */}
+                {selectedEpisodes.some((ep) => ep.status === 'queued' || ep.status === 'processing') && (
+                  <Button
+                    onClick={handleFailSelected}
+                    disabled={failMutation.isPending}
+                    size="sm"
+                    variant="destructive"
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Mark Failed
+                  </Button>
+                )}
+                {/* Ignore - for discovered/failed episodes */}
+                {selectedEpisodes.some((ep) => ep.status === 'discovered' || ep.status === 'failed') && (
+                  <Button
+                    onClick={handleIgnoreSelected}
+                    disabled={ignoreMutation.isPending}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <EyeOff className="mr-2 h-4 w-4" />
+                    Ignore
+                  </Button>
+                )}
               </>
             )}
             {isIgnoredMode && (
