@@ -39,3 +39,13 @@ export interface EpisodeProgress {
   progress: number
   stage: string
 }
+
+export interface EpisodeStats {
+  discovered: number
+  queued: number
+  processing: number
+  cleaned: number
+  failed: number
+  ignored: number
+  total: number
+}

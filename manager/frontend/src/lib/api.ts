@@ -1,4 +1,4 @@
-import type { Feed, PaginatedEpisodes } from '@/types/api'
+import type { Feed, PaginatedEpisodes, EpisodeStats } from '@/types/api'
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`/api${endpoint}`, {
@@ -80,4 +80,6 @@ export const episodesApi = {
       method: 'POST',
       body: JSON.stringify({ episode_ids: episodeIds }),
     }),
+
+  stats: () => fetchAPI<EpisodeStats>('/episodes/stats'),
 }

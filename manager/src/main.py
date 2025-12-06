@@ -443,6 +443,33 @@ async def list_episodes(
     )
 
 
+class EpisodeStats(BaseModel):
+    """Episode counts by status."""
+    discovered: int
+    queued: int
+    processing: int
+    cleaned: int
+    failed: int
+    ignored: int
+    total: int
+
+
+@api.get("/episodes/stats", response_model=EpisodeStats)
+async def get_episode_stats(session: Session = Depends(get_db_session)):
+    """Get episode counts by status."""
+    from sqlalchemy import func
+
+    stats = {}
+    for status in EpisodeStatus:
+        count = session.exec(
+            select(func.count()).where(Episode.status == status)
+        ).one()
+        stats[status.value] = count
+
+    stats['total'] = sum(stats.values())
+    return EpisodeStats(**stats)
+
+
 class BulkEpisodeRequest(BaseModel):
     episode_ids: List[int]
 

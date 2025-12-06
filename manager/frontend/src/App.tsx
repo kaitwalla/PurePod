@@ -4,6 +4,7 @@ import { Podcast, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { FeedView } from '@/components/FeedView'
 import { EpisodeTable } from '@/components/EpisodeTable'
+import { StatusOverview } from '@/components/StatusOverview'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,6 +19,12 @@ type Tab = 'feeds' | 'episodes'
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('feeds')
+  const [statusFilter, setStatusFilter] = useState<string | null>(null)
+
+  const handleStatusClick = (status: string | null) => {
+    setStatusFilter(status)
+    setActiveTab('episodes')
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -36,7 +43,10 @@ function AppContent() {
               </Button>
               <Button
                 variant={activeTab === 'episodes' ? 'default' : 'ghost'}
-                onClick={() => setActiveTab('episodes')}
+                onClick={() => {
+                  setStatusFilter(null)
+                  setActiveTab('episodes')
+                }}
               >
                 <Inbox className="mr-2 h-4 w-4" />
                 Episode Inbox
@@ -48,6 +58,8 @@ function AppContent() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        <StatusOverview onStatusClick={handleStatusClick} />
+
         {activeTab === 'feeds' && (
           <div>
             <h2 className="text-xl font-semibold mb-4">Subscribed Podcasts</h2>
@@ -56,8 +68,10 @@ function AppContent() {
         )}
         {activeTab === 'episodes' && (
           <div>
-            <h2 className="text-xl font-semibold mb-4">Episode Inbox</h2>
-            <EpisodeTable />
+            <h2 className="text-xl font-semibold mb-4">
+              {statusFilter ? `${statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)} Episodes` : 'Episode Inbox'}
+            </h2>
+            <EpisodeTable initialStatusFilter={statusFilter} onClearFilter={() => setStatusFilter(null)} />
           </div>
         )}
       </main>

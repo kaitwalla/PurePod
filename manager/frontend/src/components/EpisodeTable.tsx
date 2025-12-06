@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -8,7 +8,7 @@ import {
   type RowSelectionState,
 } from '@tanstack/react-table'
 import { format } from 'date-fns'
-import { ListPlus, EyeOff, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ListPlus, EyeOff, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -34,22 +34,42 @@ const statusVariantMap: Record<EpisodeStatus, 'default' | 'secondary' | 'destruc
 
 type TabType = 'active' | 'ignored'
 
-export function EpisodeTable() {
+interface EpisodeTableProps {
+  initialStatusFilter?: string | null
+  onClearFilter?: () => void
+}
+
+export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTableProps) {
   const queryClient = useQueryClient()
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
   const [activeTab, setActiveTab] = useState<TabType>('active')
   const [selectedFeedId, setSelectedFeedId] = useState<number | undefined>()
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(initialStatusFilter ?? undefined)
   const [page, setPage] = useState(1)
   const pageSize = 25
 
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['episodes', selectedFeedId, activeTab, page],
+  // Update status filter when prop changes
+  useEffect(() => {
+    if (initialStatusFilter) {
+      setStatusFilter(initialStatusFilter)
+      setActiveTab('active') // Reset tab when using status filter
+      setRowSelection({})
+      setPage(1)
+    }
+  }, [initialStatusFilter])
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['episodes', selectedFeedId, activeTab, statusFilter, page],
     queryFn: () => {
-      console.log('Fetching episodes:', { selectedFeedId, activeTab, page })
+      // If we have a specific status filter, use that
+      // Otherwise, use the tab logic
+      const status = statusFilter ?? (activeTab === 'ignored' ? 'ignored' : undefined)
+      const showIgnored = statusFilter === 'ignored' || activeTab === 'ignored'
+
       return episodesApi.list({
         feed_id: selectedFeedId,
-        status: activeTab === 'ignored' ? 'ignored' : undefined,
-        show_ignored: activeTab === 'ignored',
+        status,
+        show_ignored: showIgnored,
         page,
         page_size: pageSize,
       })
@@ -164,9 +184,11 @@ export function EpisodeTable() {
     },
     enableRowSelection: (row) => {
       const status = row.original.status
-      if (activeTab === 'ignored') {
+      // When viewing ignored tab or filtering by ignored status, only ignored episodes can be selected
+      if (activeTab === 'ignored' || statusFilter === 'ignored') {
         return status === 'ignored'
       }
+      // Otherwise, only discovered or failed episodes can be selected
       return status === 'discovered' || status === 'failed'
     },
     onRowSelectionChange: setRowSelection,
@@ -195,6 +217,15 @@ export function EpisodeTable() {
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
+    setStatusFilter(undefined) // Clear status filter when changing tabs
+    if (onClearFilter) onClearFilter()
+    setRowSelection({})
+    setPage(1)
+  }
+
+  const handleClearStatusFilter = () => {
+    setStatusFilter(undefined)
+    if (onClearFilter) onClearFilter()
     setRowSelection({})
     setPage(1)
   }
@@ -218,18 +249,35 @@ export function EpisodeTable() {
 
   return (
     <div className="space-y-4">
+      {/* Status Filter Badge */}
+      {statusFilter && (
+        <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+          <span className="text-sm">
+            Showing: <strong>{statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}</strong> episodes
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearStatusFilter}
+            className="h-6 w-6 p-0"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* Tabs and Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex gap-2">
           <Button
-            variant={activeTab === 'active' ? 'default' : 'outline'}
+            variant={activeTab === 'active' && !statusFilter ? 'default' : 'outline'}
             size="sm"
             onClick={() => handleTabChange('active')}
           >
             Active
           </Button>
           <Button
-            variant={activeTab === 'ignored' ? 'default' : 'outline'}
+            variant={activeTab === 'ignored' && !statusFilter ? 'default' : 'outline'}
             size="sm"
             onClick={() => handleTabChange('ignored')}
           >
@@ -269,7 +317,7 @@ export function EpisodeTable() {
         </div>
         {selectedEpisodes.length > 0 && (
           <div className="flex gap-2">
-            {activeTab === 'active' && (
+            {activeTab === 'active' && statusFilter !== 'ignored' && (
               <>
                 <Button
                   onClick={handleQueueSelected}
@@ -290,7 +338,7 @@ export function EpisodeTable() {
                 </Button>
               </>
             )}
-            {activeTab === 'ignored' && (
+            {(activeTab === 'ignored' || statusFilter === 'ignored') && (
               <Button
                 onClick={handleUnignoreSelected}
                 disabled={unignoreMutation.isPending}
