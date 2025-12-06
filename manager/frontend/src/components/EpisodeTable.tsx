@@ -96,7 +96,7 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     queryFn: feedsApi.list,
   })
 
-  const episodes = data?.items ?? []
+  const episodes = useMemo(() => data?.items ?? [], [data?.items])
   const totalPages = data?.total_pages ?? 1
   const total = data?.total ?? 0
 
@@ -194,6 +194,8 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   // Determine if we're in "ignored" mode based on tab or status filter
   const isIgnoredMode = activeTab === 'ignored' || statusFilter === 'ignored'
 
+  const coreRowModel = useMemo(() => getCoreRowModel(), [])
+
   const table = useReactTable({
     data: episodes,
     columns,
@@ -202,7 +204,7 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
-    getCoreRowModel: getCoreRowModel(),
+    getCoreRowModel: coreRowModel,
     getRowId: (row) => String(row.id),
   })
 
