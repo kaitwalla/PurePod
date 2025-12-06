@@ -263,6 +263,9 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     setPage(1)
   }
 
+  // DEBUG: Show raw state
+  console.log('Render state:', { activeTab, statusFilter, selectedFeedId, page, isLoading, episodeCount: episodes.length })
+
   if (error) {
     return (
       <div className="rounded-md border border-destructive">
