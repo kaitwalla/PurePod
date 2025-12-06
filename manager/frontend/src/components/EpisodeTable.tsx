@@ -59,21 +59,28 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     }
   }, [initialStatusFilter])
 
+  const queryKey = ['episodes', selectedFeedId, activeTab, statusFilter, page]
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['episodes', selectedFeedId, activeTab, statusFilter, page],
-    queryFn: () => {
+    queryKey,
+    queryFn: async () => {
       // If we have a specific status filter, use that
       // Otherwise, use the tab logic
       const status = statusFilter ?? (activeTab === 'ignored' ? 'ignored' : undefined)
       const showIgnored = statusFilter === 'ignored' || activeTab === 'ignored'
 
-      return episodesApi.list({
+      console.log('useQuery queryFn called with key:', JSON.stringify(queryKey))
+
+      const result = await episodesApi.list({
         feed_id: selectedFeedId,
         status,
         show_ignored: showIgnored,
         page,
         page_size: pageSize,
       })
+
+      console.log('useQuery queryFn completed')
+      return result
     },
   })
 
