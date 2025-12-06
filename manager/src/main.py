@@ -486,13 +486,11 @@ if STATIC_DIR.exists():
         """Serve the SPA index.html at root."""
         return FileResponse(STATIC_DIR / "index.html")
 
-    # Mount static assets (JS, CSS, etc.)
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
-
     @app.get("/{path:path}")
     async def serve_spa_fallback(path: str):
-        """Serve index.html for SPA client-side routing."""
+        """Serve static files or index.html for SPA client-side routing."""
         file_path = STATIC_DIR / path
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
+        # Return index.html for SPA routes
         return FileResponse(STATIC_DIR / "index.html")
