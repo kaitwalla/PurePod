@@ -38,51 +38,53 @@ RUN mkdir -p /app/audio
 RUN pip install supervisor
 
 # Create startup script that generates vite config with PUBLIC_HOSTNAME
-RUN echo '#!/bin/bash\n\
-# Extract hostname without port for allowedHosts\n\
-ALLOWED_HOST=$(echo "${PUBLIC_HOSTNAME:-localhost}" | cut -d: -f1)\n\
-\n\
-cat > /app/frontend/vite.config.dev.ts << EOF\n\
-import { defineConfig } from "vite"\n\
-import react from "@vitejs/plugin-react"\n\
-import tailwindcss from "@tailwindcss/vite"\n\
-import path from "path"\n\
-\n\
-export default defineConfig({\n\
-  plugins: [react(), tailwindcss()],\n\
-  resolve: {\n\
-    alias: {\n\
-      "@": path.resolve(__dirname, "./src"),\n\
-    },\n\
-  },\n\
-  server: {\n\
-    host: "0.0.0.0",\n\
-    port: 8000,\n\
-    allowedHosts: ["localhost", "${ALLOWED_HOST}"],\n\
-    proxy: {\n\
-      "/api": {\n\
-        target: "http://127.0.0.1:8001",\n\
-        changeOrigin: true,\n\
-        rewrite: (path) => path.replace(/^\\/api/, ""),\n\
-      },\n\
-      "/feeds": { target: "http://127.0.0.1:8001" },\n\
-      "/feed": { target: "http://127.0.0.1:8001" },\n\
-      "/episodes": { target: "http://127.0.0.1:8001" },\n\
-      "/upload": { target: "http://127.0.0.1:8001" },\n\
-      "/progress": { target: "http://127.0.0.1:8001" },\n\
-      "/files": { target: "http://127.0.0.1:8001" },\n\
-      "/health": { target: "http://127.0.0.1:8001" },\n\
-      "/ws": {\n\
-        target: "ws://127.0.0.1:8001",\n\
-        ws: true,\n\
-      },\n\
-    },\n\
-  },\n\
-})\n\
-EOF\n\
-\n\
-exec supervisord -c /etc/supervisord.conf\n\
-' > /app/start.sh && chmod +x /app/start.sh
+RUN cat > /app/start.sh << 'SCRIPT'
+#!/bin/bash
+# Extract hostname without port for allowedHosts
+ALLOWED_HOST=$(echo "${PUBLIC_HOSTNAME:-localhost}" | cut -d: -f1)
+
+cat > /app/frontend/vite.config.dev.ts << EOF
+import { defineConfig } from "vite"
+import react from "@vitejs/plugin-react"
+import tailwindcss from "@tailwindcss/vite"
+import path from "path"
+
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  server: {
+    host: "0.0.0.0",
+    port: 8000,
+    allowedHosts: ["localhost", "${ALLOWED_HOST}"],
+    proxy: {
+      "/api": {
+        target: "http://127.0.0.1:8001",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+      "/feeds": { target: "http://127.0.0.1:8001" },
+      "/feed": { target: "http://127.0.0.1:8001" },
+      "/episodes": { target: "http://127.0.0.1:8001" },
+      "/upload": { target: "http://127.0.0.1:8001" },
+      "/progress": { target: "http://127.0.0.1:8001" },
+      "/files": { target: "http://127.0.0.1:8001" },
+      "/health": { target: "http://127.0.0.1:8001" },
+      "/ws": {
+        target: "ws://127.0.0.1:8001",
+        ws: true,
+      },
+    },
+  },
+})
+EOF
+
+exec supervisord -c /etc/supervisord.conf
+SCRIPT
+RUN chmod +x /app/start.sh
 
 # Create supervisor config - backend on 8001, vite on 8000
 RUN echo '[supervisord]\n\
