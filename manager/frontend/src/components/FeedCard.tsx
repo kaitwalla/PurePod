@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { RefreshCw, Podcast, Trash2 } from 'lucide-react'
+import { RefreshCw, Podcast, Trash2, Rss, Copy, Check } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,15 @@ interface FeedCardProps {
 export function FeedCard({ feed }: FeedCardProps) {
   const queryClient = useQueryClient()
   const [showConfirm, setShowConfirm] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const rssUrl = `${window.location.origin}/feed/${feed.id}`
+
+  const copyRssUrl = () => {
+    navigator.clipboard.writeText(rssUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   const updateAutoProcess = useMutation({
     mutationFn: (autoProcess: boolean) =>
@@ -93,6 +102,21 @@ export function FeedCard({ feed }: FeedCardProps) {
             onCheckedChange={(checked) => updateAutoProcess.mutate(checked)}
             disabled={updateAutoProcess.isPending}
           />
+        </div>
+        <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+          <Rss className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <code className="text-xs flex-1 truncate" title={rssUrl}>
+            {rssUrl}
+          </code>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 flex-shrink-0"
+            onClick={copyRssUrl}
+            title="Copy RSS URL"
+          >
+            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+          </Button>
         </div>
         <div className="pt-2 border-t">
           {showConfirm ? (
