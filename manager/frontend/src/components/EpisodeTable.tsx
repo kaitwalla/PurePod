@@ -42,16 +42,18 @@ export function EpisodeTable() {
   const [page, setPage] = useState(1)
   const pageSize = 25
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['episodes', { feedId: selectedFeedId, activeTab, page }],
-    queryFn: () => episodesApi.list({
-      feed_id: selectedFeedId,
-      status: activeTab === 'ignored' ? 'ignored' : undefined,
-      show_ignored: activeTab === 'ignored',
-      page,
-      page_size: pageSize,
-    }),
-    refetchInterval: 5000,
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['episodes', selectedFeedId, activeTab, page],
+    queryFn: () => {
+      console.log('Fetching episodes:', { selectedFeedId, activeTab, page })
+      return episodesApi.list({
+        feed_id: selectedFeedId,
+        status: activeTab === 'ignored' ? 'ignored' : undefined,
+        show_ignored: activeTab === 'ignored',
+        page,
+        page_size: pageSize,
+      })
+    },
   })
 
   const { data: feeds = [] } = useQuery({
@@ -204,7 +206,7 @@ export function EpisodeTable() {
     setPage(1)
   }
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <div className="rounded-md border">
         <div className="h-96 flex items-center justify-center text-muted-foreground">

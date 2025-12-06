@@ -58,7 +58,9 @@ export const episodesApi = {
     if (params?.page) searchParams.set('page', String(params.page))
     if (params?.page_size) searchParams.set('page_size', String(params.page_size))
     const query = searchParams.toString()
-    return fetchAPI<PaginatedEpisodes>(`/episodes${query ? `?${query}` : ''}`)
+    const url = `/episodes${query ? `?${query}` : ''}`
+    console.log('Episodes API call:', url, params)
+    return fetchAPI<PaginatedEpisodes>(url)
   },
 
   queueBulk: (episodeIds: number[]) =>
