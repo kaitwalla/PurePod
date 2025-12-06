@@ -1,20 +1,30 @@
 import type { Feed, PaginatedEpisodes, EpisodeStats } from '@/types/api'
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
+  const url = `/api${endpoint}`
+  console.log('fetchAPI starting:', url)
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
-    throw new Error(error.detail || `API error: ${response.status}`)
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+
+    console.log('fetchAPI response:', url, response.status)
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+      throw new Error(error.detail || `API error: ${response.status}`)
+    }
+
+    return response.json()
+  } catch (err) {
+    console.error('fetchAPI error:', url, err)
+    throw err
   }
-
-  return response.json()
 }
 
 export const feedsApi = {
