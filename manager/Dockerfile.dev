@@ -63,14 +63,8 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: "http://127.0.0.1:8001",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
       },
-      "/feeds": { target: "http://127.0.0.1:8001" },
       "/feed": { target: "http://127.0.0.1:8001" },
-      "/episodes": { target: "http://127.0.0.1:8001" },
-      "/upload": { target: "http://127.0.0.1:8001" },
-      "/progress": { target: "http://127.0.0.1:8001" },
       "/files": { target: "http://127.0.0.1:8001" },
       "/health": { target: "http://127.0.0.1:8001" },
       "/ws": {

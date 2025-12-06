@@ -1,10 +1,7 @@
 import type { Feed, PaginatedEpisodes } from '@/types/api'
 
-// In dev, Vite proxies /api/* to the backend. In prod, API is served from same origin.
-const API_BASE = import.meta.env.DEV ? '/api' : ''
-
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(`/api${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',

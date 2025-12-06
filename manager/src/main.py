@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List, Set
 
 import aiofiles
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, WebSocket, WebSocketDisconnect, APIRouter
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -65,6 +65,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Create API router - all API endpoints go here
+api = APIRouter(prefix="/api")
+
 # Mount static files for serving cleaned audio
 app.mount("/files", StaticFiles(directory=str(AUDIO_STORAGE_PATH)), name="files")
 
@@ -99,7 +102,7 @@ async def websocket_progress(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-@app.post("/progress/{episode_id}")
+@api.post("/progress/{episode_id}")
 async def update_progress(
     episode_id: int,
     progress: int,
@@ -118,7 +121,7 @@ async def update_progress(
     return {"status": "ok"}
 
 
-@app.post("/upload/{episode_id}")
+@api.post("/upload/{episode_id}")
 async def upload_cleaned_audio(
     episode_id: int,
     file: UploadFile = File(...),
@@ -173,7 +176,7 @@ async def upload_cleaned_audio(
     }
 
 
-@app.post("/feeds", response_model=Feed)
+@api.post("/feeds", response_model=Feed)
 async def create_feed(
     rss_url: str,
     session: Session = Depends(get_db_session),
@@ -212,14 +215,14 @@ async def create_feed(
     return feed
 
 
-@app.get("/feeds", response_model=List[Feed])
+@api.get("/feeds", response_model=List[Feed])
 async def list_feeds(session: Session = Depends(get_db_session)):
     """List all feeds."""
     feeds = session.exec(select(Feed)).all()
     return feeds
 
 
-@app.patch("/feeds/{feed_id}/auto-process", response_model=Feed)
+@api.patch("/feeds/{feed_id}/auto-process", response_model=Feed)
 async def update_feed_auto_process(
     feed_id: int,
     auto_process: bool,
@@ -239,7 +242,7 @@ async def update_feed_auto_process(
     return feed
 
 
-@app.delete("/feeds/{feed_id}")
+@api.delete("/feeds/{feed_id}")
 async def delete_feed(
     feed_id: int,
     session: Session = Depends(get_db_session),
@@ -268,7 +271,7 @@ async def delete_feed(
     return {"message": f"Feed {feed_id} deleted", "deleted_episodes": episode_count}
 
 
-@app.post("/feeds/{feed_id}/ingest")
+@api.post("/feeds/{feed_id}/ingest")
 async def trigger_ingest(feed_id: int, session: Session = Depends(get_db_session)):
     """Trigger ingestion for a specific feed."""
     feed = session.get(Feed, feed_id)
@@ -364,7 +367,7 @@ class PaginatedEpisodes(BaseModel):
     total_pages: int
 
 
-@app.get("/episodes", response_model=PaginatedEpisodes)
+@api.get("/episodes", response_model=PaginatedEpisodes)
 async def list_episodes(
     feed_id: int = None,
     status: EpisodeStatus = None,
@@ -444,7 +447,7 @@ class BulkEpisodeRequest(BaseModel):
     episode_ids: List[int]
 
 
-@app.post("/episodes/ignore")
+@api.post("/episodes/ignore")
 async def ignore_episodes(
     request: BulkEpisodeRequest,
     session: Session = Depends(get_db_session),
@@ -464,7 +467,7 @@ async def ignore_episodes(
     return {"ignored": ignored_count}
 
 
-@app.post("/episodes/unignore")
+@api.post("/episodes/unignore")
 async def unignore_episodes(
     request: BulkEpisodeRequest,
     session: Session = Depends(get_db_session),
@@ -484,7 +487,7 @@ async def unignore_episodes(
     return {"restored": restored_count}
 
 
-@app.post("/episodes/queue")
+@api.post("/episodes/queue")
 async def queue_episodes(
     request: BulkEpisodeRequest,
     session: Session = Depends(get_db_session),
@@ -517,6 +520,9 @@ async def queue_episodes(
 
     return {"queued": queued_count, "tasks": dispatched_tasks}
 
+
+# Include API router
+app.include_router(api)
 
 # Serve frontend static files (must be after API routes)
 if STATIC_DIR.exists():
