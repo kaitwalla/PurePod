@@ -202,6 +202,13 @@ async def create_feed(
     session.commit()
     session.refresh(feed)
 
+    # Auto-ingest episodes from the feed
+    try:
+        new_episodes = ingest_feed(feed.id, session)
+        logger.info(f"Auto-ingested {len(new_episodes)} episodes for new feed {feed.id}")
+    except Exception as e:
+        logger.error(f"Failed to auto-ingest episodes for feed {feed.id}: {e}")
+
     return feed
 
 
