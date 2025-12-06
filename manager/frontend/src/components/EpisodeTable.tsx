@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -45,23 +45,15 @@ export function EpisodeTable() {
   const pageSize = 25
   const { progressMap } = useWebSocket()
 
-  const queryParams: EpisodeListParams = useMemo(() => {
-    const params: EpisodeListParams = {
+  const { data, isLoading } = useQuery({
+    queryKey: ['episodes', { feedId: selectedFeedId, activeTab, page }],
+    queryFn: () => episodesApi.list({
       feed_id: selectedFeedId,
+      status: activeTab === 'ignored' ? 'ignored' : undefined,
       show_ignored: activeTab === 'ignored',
       page,
       page_size: pageSize,
-    }
-    // If showing ignored tab, filter to only ignored
-    if (activeTab === 'ignored') {
-      params.status = 'ignored'
-    }
-    return params
-  }, [selectedFeedId, activeTab, page, pageSize])
-
-  const { data, isLoading } = useQuery({
-    queryKey: ['episodes', queryParams],
-    queryFn: () => episodesApi.list(queryParams),
+    }),
     refetchInterval: 5000,
   })
 
@@ -97,6 +89,10 @@ export function EpisodeTable() {
       setRowSelection({})
     },
   })
+
+  // Store progressMap in a ref to avoid recreating columns on every update
+  const progressMapRef = useRef(progressMap)
+  progressMapRef.current = progressMap
 
   const columns = useMemo<ColumnDef<Episode>[]>(
     () => [
@@ -154,7 +150,7 @@ export function EpisodeTable() {
         header: 'Status',
         cell: ({ row }) => {
           const status = row.original.status
-          const progress = progressMap.get(row.original.id)
+          const progress = progressMapRef.current.get(row.original.id)
 
           return (
             <div className="flex items-center gap-2">
@@ -171,7 +167,18 @@ export function EpisodeTable() {
         },
       },
     ],
-    [progressMap]
+    []
+  )
+
+  const canSelectRow = useCallback(
+    (row: { original: Episode }) => {
+      const status = row.original.status
+      if (activeTab === 'ignored') {
+        return status === 'ignored'
+      }
+      return status === 'discovered' || status === 'failed'
+    },
+    [activeTab]
   )
 
   const table = useReactTable({
@@ -180,13 +187,7 @@ export function EpisodeTable() {
     state: {
       rowSelection,
     },
-    enableRowSelection: (row) => {
-      const status = row.original.status
-      if (activeTab === 'ignored') {
-        return status === 'ignored'
-      }
-      return status === 'discovered' || status === 'failed'
-    },
+    enableRowSelection: canSelectRow,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getRowId: (row) => String(row.id),
