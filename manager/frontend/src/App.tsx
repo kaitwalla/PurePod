@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { FeedView } from '@/components/FeedView'
 import { EpisodeTable } from '@/components/EpisodeTable'
 import { StatusOverview } from '@/components/StatusOverview'
+import { PasswordGate } from '@/components/PasswordGate'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,9 +82,11 @@ function AppContent() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AppContent />
-    </QueryClientProvider>
+    <PasswordGate>
+      <QueryClientProvider client={queryClient}>
+        <AppContent />
+      </QueryClientProvider>
+    </PasswordGate>
   )
 }
 
