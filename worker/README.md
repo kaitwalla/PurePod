@@ -47,7 +47,7 @@ The Worker is the ML processing node for PodcastPurifier. It runs on Apple Silic
 | Model | Purpose | Size |
 |-------|---------|------|
 | `mlx-community/distil-whisper-large-v3` | Audio transcription with word timestamps | ~1.5GB |
-| `mlx-community/Llama-3-8B-Instruct-4bit` | Ad segment detection from transcript | ~4.5GB |
+| `mlx-community/Meta-Llama-3-8B-Instruct-4bit` | Ad segment detection from transcript | ~5.3GB |
 
 Models are automatically downloaded on first use and cached locally.
 
@@ -172,6 +172,36 @@ The LLM looks for these patterns in the transcript:
 | **Total recommended** | **8+ GB unified memory** |
 
 For Macs with 8GB RAM, use `--concurrency=1` to avoid memory pressure.
+
+## macOS Local Network Permissions
+
+On macOS, Python may be blocked from accessing local network resources (like a remote Redis server) due to privacy permissions. If you see "No route to host" errors, use the AppleScript workaround:
+
+### Download Models
+
+Get a Hugging Face token at https://huggingface.co/settings/tokens (read access is enough).
+
+Open Script Editor and run `scripts/download_models.scpt` (replace `your_token_here` with your token), or paste:
+
+```applescript
+do shell script "cd /Users/kait/Dev/PurePod/worker && HF_TOKEN=your_token_here .venv/bin/python scripts/download_models.py"
+```
+
+### Start Worker
+
+Open Script Editor and run `scripts/start_worker.scpt`, or paste:
+
+```applescript
+do shell script "cd /Users/kait/Dev/PurePod/worker && .venv/bin/python -m celery -A worker.main worker --loglevel=info -Q audio_processing --pool=solo >> /tmp/celery-worker.log 2>&1 &"
+```
+
+Logs are written to `/tmp/celery-worker.log`. The `--pool=solo` flag is required to avoid MLX crashes with forked processes.
+
+### Stop Worker
+
+```bash
+pkill -f "celery -A worker.main"
+```
 
 ## Troubleshooting
 

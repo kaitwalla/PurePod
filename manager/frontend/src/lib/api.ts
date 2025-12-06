@@ -79,5 +79,17 @@ export const episodesApi = {
       body: JSON.stringify({ episode_ids: episodeIds }),
     }),
 
+  unqueueBulk: (episodeIds: number[]) =>
+    fetchAPI<{ unqueued: number }>('/episodes/unqueue', {
+      method: 'POST',
+      body: JSON.stringify({ episode_ids: episodeIds }),
+    }),
+
+  failBulk: (episodeIds: number[]) =>
+    fetchAPI<{ failed: number }>('/episodes/fail', {
+      method: 'POST',
+      body: JSON.stringify({ episode_ids: episodeIds }),
+    }),
+
   stats: () => fetchAPI<EpisodeStats>('/episodes/stats'),
 }
