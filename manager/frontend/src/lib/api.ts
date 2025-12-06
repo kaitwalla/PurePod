@@ -2,17 +2,25 @@ import type { Feed, PaginatedEpisodes, EpisodeStats } from '@/types/api'
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `/api${endpoint}`
-  console.log('fetchAPI starting:', url)
+  console.log('fetchAPI starting:', url, 'at', Date.now())
 
   try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+      console.log('fetchAPI timeout after 10s:', url)
+      controller.abort()
+    }, 10000)
+
     const response = await fetch(url, {
       ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
       },
     })
 
+    clearTimeout(timeoutId)
     console.log('fetchAPI response:', url, response.status)
 
     if (!response.ok) {
