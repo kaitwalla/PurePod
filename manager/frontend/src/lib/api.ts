@@ -1,38 +1,20 @@
 import type { Feed, PaginatedEpisodes, EpisodeStats } from '@/types/api'
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `/api${endpoint}`
-  console.log('fetchAPI starting:', url, 'at', Date.now())
+  const response = await fetch(`/api${endpoint}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
 
-  try {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => {
-      console.log('fetchAPI timeout after 10s:', url)
-      controller.abort()
-    }, 10000)
-
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options?.headers,
-      },
-    })
-
-    clearTimeout(timeoutId)
-    console.log('fetchAPI response:', url, response.status)
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
-      throw new Error(error.detail || `API error: ${response.status}`)
-    }
-
-    return response.json()
-  } catch (err) {
-    console.error('fetchAPI error:', url, err)
-    throw err
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(error.detail || `API error: ${response.status}`)
   }
+
+  return response.json()
 }
 
 export const feedsApi = {
@@ -76,9 +58,7 @@ export const episodesApi = {
     if (params?.page) searchParams.set('page', String(params.page))
     if (params?.page_size) searchParams.set('page_size', String(params.page_size))
     const query = searchParams.toString()
-    const url = `/episodes${query ? `?${query}` : ''}`
-    console.log('Episodes API call:', url, params)
-    return fetchAPI<PaginatedEpisodes>(url)
+    return fetchAPI<PaginatedEpisodes>(`/episodes${query ? `?${query}` : ''}`)
   },
 
   queueBulk: (episodeIds: number[]) =>

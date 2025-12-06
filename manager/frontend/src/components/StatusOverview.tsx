@@ -11,8 +11,7 @@ export function StatusOverview({ onStatusClick }: StatusOverviewProps) {
   const { data: stats } = useQuery({
     queryKey: ['episode-stats'],
     queryFn: episodesApi.stats,
-    // Temporarily disabled to debug hanging requests
-    // refetchInterval: 5000,
+    refetchInterval: 5000,
   })
 
   if (!stats) return null

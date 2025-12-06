@@ -59,37 +59,24 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     }
   }, [initialStatusFilter])
 
-  const queryKey = ['episodes', selectedFeedId, activeTab, statusFilter, page]
-
   const { data, isLoading, error } = useQuery({
-    queryKey,
-    queryFn: async () => {
+    queryKey: ['episodes', selectedFeedId, activeTab, statusFilter, page],
+    queryFn: () => {
       // If we have a specific status filter, use that
       // Otherwise, use the tab logic
       const status = statusFilter ?? (activeTab === 'ignored' ? 'ignored' : undefined)
       const showIgnored = statusFilter === 'ignored' || activeTab === 'ignored'
 
-      console.log('useQuery queryFn called with key:', JSON.stringify(queryKey))
-
-      const result = await episodesApi.list({
+      return episodesApi.list({
         feed_id: selectedFeedId,
         status,
         show_ignored: showIgnored,
         page,
         page_size: pageSize,
       })
-
-      console.log('useQuery queryFn completed')
-      return result
     },
   })
 
-  // Log any errors
-  useEffect(() => {
-    if (error) {
-      console.error('Episodes query error:', error)
-    }
-  }, [error])
 
   const { data: feeds = [] } = useQuery({
     queryKey: ['feeds'],
@@ -202,7 +189,13 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     state: {
       rowSelection,
     },
-    enableRowSelection: true,
+    enableRowSelection: (row) => {
+      const status = row.original.status
+      if (isIgnoredMode) {
+        return status === 'ignored'
+      }
+      return status === 'discovered' || status === 'failed'
+    },
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: coreRowModel,
     getRowId: (row) => String(row.id),
@@ -228,14 +221,11 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   }
 
   const handleTabChange = (tab: TabType) => {
-    console.log('handleTabChange called:', tab)
     setActiveTab(tab)
     setStatusFilter(undefined) // Clear status filter when changing tabs
-    // Temporarily disabled to debug
-    // if (onClearFilter) onClearFilter()
+    if (onClearFilter) onClearFilter()
     setRowSelection({})
     setPage(1)
-    console.log('handleTabChange done')
   }
 
   const handleClearStatusFilter = () => {
@@ -251,9 +241,6 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
     setRowSelection({})
     setPage(1)
   }
-
-  // DEBUG: Show raw state
-  console.log('Render state:', { activeTab, statusFilter, selectedFeedId, page, isLoading, episodeCount: episodes.length })
 
   if (error) {
     return (
