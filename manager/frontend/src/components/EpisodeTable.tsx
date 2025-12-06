@@ -239,11 +239,14 @@ export function EpisodeTable({ initialStatusFilter, onClearFilter }: EpisodeTabl
   }
 
   const handleTabChange = (tab: TabType) => {
+    console.log('handleTabChange called:', tab)
     setActiveTab(tab)
     setStatusFilter(undefined) // Clear status filter when changing tabs
-    if (onClearFilter) onClearFilter()
+    // Temporarily disabled to debug
+    // if (onClearFilter) onClearFilter()
     setRowSelection({})
     setPage(1)
+    console.log('handleTabChange done')
   }
 
   const handleClearStatusFilter = () => {
